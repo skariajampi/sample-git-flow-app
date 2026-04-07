@@ -1,0 +1,640 @@
+// Jenkinsfile - Complete GitFlow CI/CD Pipeline with GitHub Polling
+pipeline {
+    agent none  // No default agent - each stage defines its own
+
+    // ============ POLLING TRIGGER CONFIGURATION ============
+    triggers {
+        // Poll GitHub every 5 minutes for changes on all branches
+        pollSCM('* * * * *')
+
+        // For testing, use every minute: '* * * * *'
+        // For production, use: 'H */4 * * *' (every 4 hours)
+    }
+
+    environment {
+        // Application configuration
+        APP_NAME = 'sample-gitflow-app'
+        DOCKER_HUB_REPO = 'skariaj/sample-gitflow-app'
+
+        // Different namespaces for different environments
+        STAGING_NAMESPACE = 'staging'
+        PRODUCTION_NAMESPACE = 'production'
+
+        // Version calculation
+        BUILD_VERSION = "${env.BUILD_NUMBER}"
+        GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+
+        // Branch detection - will be set in first stage
+        IS_FEATURE = 'false'
+        IS_DEVELOP = 'false'
+        IS_RELEASE = 'false'
+        IS_MAIN = 'false'
+        IS_HOTFIX = 'false'
+    }
+
+    stages {
+        // ============ STAGE 0: BRANCH DETECTION (Runs first on all branches) ============
+        stage('Detect Branch Type') {
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                script {
+                    def branch = env.BRANCH_NAME
+
+                    // Set branch type flags
+                    IS_FEATURE = branch.startsWith('feature/')
+                    IS_DEVELOP = (branch == 'develop' || branch == 'dev')
+                    IS_RELEASE = branch.startsWith('release/')
+                    IS_MAIN = (branch == 'main' || branch == 'master')
+                    IS_HOTFIX = branch.startsWith('hotfix/')
+
+                    // Print branch information
+                    echo "=========================================="
+                    echo "Branch: ${branch}"
+                    echo "Build Number: ${BUILD_VERSION}"
+                    echo "Git Commit: ${GIT_COMMIT_SHORT}"
+                    echo "=========================================="
+                    echo "Branch Type Detection:"
+                    echo "  - Feature branch: ${IS_FEATURE}"
+                    echo "  - Develop branch: ${IS_DEVELOP}"
+                    echo "  - Release branch: ${IS_RELEASE}"
+                    echo "  - Main branch: ${IS_MAIN}"
+                    echo "  - Hotfix branch: ${IS_HOTFIX}"
+                    echo "=========================================="
+
+                    // Set environment variables for later stages
+                    env.IS_FEATURE = IS_FEATURE.toString()
+                    env.IS_DEVELOP = IS_DEVELOP.toString()
+                    env.IS_RELEASE = IS_RELEASE.toString()
+                    env.IS_MAIN = IS_MAIN.toString()
+                    env.IS_HOTFIX = IS_HOTFIX.toString()
+                }
+            }
+        }
+
+        // ============ STAGE 1: UNIT TESTS (Runs on ALL branches) ============
+        stage('Unit Tests') {
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: maven
+    image: maven:3.9-eclipse-temurin-17
+    command: ["sleep"]
+    args: ["infinity"]
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                container('maven') {
+                    script {
+                        echo "Running Unit Tests on branch: ${env.BRANCH_NAME}"
+                        echo "Branch type - Feature: ${IS_FEATURE}, Develop: ${IS_DEVELOP}, Release: ${IS_RELEASE}, Main: ${IS_MAIN}, Hotfix: ${IS_HOTFIX}"
+                    }
+                    sh '''
+                        mvn clean test
+                        mvn surefire-report:report
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        // ============ STAGE 2: INTEGRATION TESTS (develop, release, main, hotfix) ============
+        stage('Integration Tests') {
+            when {
+                expression { return (IS_DEVELOP == 'true' || IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+            }
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: maven
+    image: maven:3.9-eclipse-temurin-17
+    command: ["sleep"]
+    args: ["infinity"]
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                container('maven') {
+                    sh '''
+                        echo "Running integration tests on branch: ${BRANCH_NAME}"
+                        mvn verify -Pintegration-tests
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit 'target/failsafe-reports/*.xml'
+                }
+            }
+        }
+
+        // ============ STAGE 3: BUILD & PACKAGE (develop, release, main, hotfix) ============
+        stage('Build & Package') {
+            when {
+                expression { return (IS_DEVELOP == 'true' || IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+            }
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: maven
+    image: maven:3.9-eclipse-temurin-17
+    command: ["sleep"]
+    args: ["infinity"]
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                container('maven') {
+                    sh 'mvn package -DskipTests'
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
+        }
+
+        // ============ STAGE 4: BUILD DOCKER IMAGE (release, main, hotfix) ============
+        stage('Build Docker Image') {
+            when {
+                expression { return (IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+            }
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: docker
+    image: docker:24-dind
+    command: ["dockerd-entrypoint.sh"]
+    securityContext:
+      privileged: true
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                container('docker') {
+                    script {
+                        def imageTag = ""
+                        def pomVersion = readMavenPom().version
+
+                        if (IS_MAIN == 'true') {
+                            // Production tag from pom.xml version
+                            imageTag = pomVersion
+                            echo "Building production image with tag: ${imageTag}"
+                        } else if (IS_RELEASE == 'true') {
+                            // Release candidate tag
+                            def releaseVersion = env.BRANCH_NAME.replace('release/', '')
+                            imageTag = "${releaseVersion}-rc.${BUILD_VERSION}"
+                            echo "Building release candidate image with tag: ${imageTag}"
+                        } else if (IS_HOTFIX == 'true') {
+                            // Hotfix tag
+                            def hotfixVersion = env.BRANCH_NAME.replace('hotfix/', '')
+                            imageTag = "${pomVersion}-hotfix-${BUILD_VERSION}"
+                            echo "Building hotfix image with tag: ${imageTag}"
+                        }
+
+                        // Build Docker image
+                        sh """
+                            docker build -t ${DOCKER_HUB_REPO}:${imageTag} .
+                            docker tag ${DOCKER_HUB_REPO}:${imageTag} ${DOCKER_HUB_REPO}:latest
+                        """
+
+                        // Save image tag for later stages
+                        env.IMAGE_TAG = imageTag
+                    }
+                }
+            }
+        }
+
+        // ============ STAGE 5: PUSH TO DOCKER HUB (release, main, hotfix) ============
+        stage('Push to Docker Hub') {
+            when {
+                expression { return (IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+            }
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: docker
+    image: docker:24-dind
+    command: ["dockerd-entrypoint.sh"]
+    securityContext:
+      privileged: true
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                container('docker') {
+                    withCredentials([string(credentialsId: 'docker-hub-password', variable: 'DOCKER_PASS')]) {
+                        script {
+                            def imageTag = env.IMAGE_TAG
+                            def pomVersion = readMavenPom().version
+
+                            sh """
+                                echo "${DOCKER_PASS}" | docker login -u skariaj --password-stdin
+                                docker push ${DOCKER_HUB_REPO}:${imageTag}
+                                docker push ${DOCKER_HUB_REPO}:latest
+
+                                echo "Successfully pushed: ${DOCKER_HUB_REPO}:${imageTag}"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============ STAGE 6: DEPLOY TO STAGING (release branches) ============
+        stage('Deploy to Staging') {
+            when {
+                expression { return (IS_RELEASE == 'true') }
+            }
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep"]
+    args: ["infinity"]
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                container('kubectl') {
+                    script {
+                        def releaseVersion = env.BRANCH_NAME.replace('release/', '')
+                        def imageTag = env.IMAGE_TAG
+
+                        sh """
+                            # Create staging namespace if not exists
+                            kubectl create namespace ${STAGING_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+                            # Deploy to staging
+                            cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_NAME}
+  namespace: ${STAGING_NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    version: ${releaseVersion}
+    branch: ${env.BRANCH_NAME}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ${APP_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${APP_NAME}
+        version: ${releaseVersion}
+    spec:
+      nodeSelector:
+        role: main
+      containers:
+      - name: ${APP_NAME}
+        image: ${DOCKER_HUB_REPO}:${imageTag}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "staging"
+        - name: APP_VERSION
+          value: "${releaseVersion}"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}
+  namespace: ${STAGING_NAMESPACE}
+spec:
+  selector:
+    app: ${APP_NAME}
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: NodePort
+EOF
+
+                            # Wait for rollout
+                            kubectl rollout status deployment/${APP_NAME} -n ${STAGING_NAMESPACE} --timeout=5m
+
+                            # Get service URL
+                            NODE_PORT=\$(kubectl get svc ${APP_NAME} -n ${STAGING_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
+                            NODE_IP=\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+                            echo "Application available at: http://\${NODE_IP}:\${NODE_PORT}"
+
+                            # Verify deployment
+                            kubectl get pods -n ${STAGING_NAMESPACE}
+                        """
+                    }
+                }
+            }
+        }
+
+        // ============ STAGE 7: DEPLOY TO PRODUCTION (main branch with approval) ============
+        stage('Deploy to Production') {
+            when {
+                expression { return (IS_MAIN == 'true') }
+            }
+            agent {
+                kubernetes {
+                    yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    role: secondary
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep"]
+    args: ["infinity"]
+  restartPolicy: Never
+'''
+                }
+            }
+            steps {
+                // Manual approval required for production
+                input message: 'Deploy to Production?', ok: 'Deploy'
+
+                container('kubectl') {
+                    script {
+                        def pomVersion = readMavenPom().version
+                        def imageTag = env.IMAGE_TAG ?: pomVersion
+
+                        sh """
+                            # Create production namespace if not exists
+                            kubectl create namespace ${PRODUCTION_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+                            # Deploy to production
+                            cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_NAME}
+  namespace: ${PRODUCTION_NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    version: ${pomVersion}
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ${APP_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${APP_NAME}
+        version: ${pomVersion}
+    spec:
+      nodeSelector:
+        role: main
+      containers:
+      - name: ${APP_NAME}
+        image: ${DOCKER_HUB_REPO}:${imageTag}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: APP_VERSION
+          value: "${pomVersion}"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}
+  namespace: ${PRODUCTION_NAMESPACE}
+spec:
+  selector:
+    app: ${APP_NAME}
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer
+EOF
+
+                            # Wait for rollout
+                            kubectl rollout status deployment/${APP_NAME} -n ${PRODUCTION_NAMESPACE} --timeout=5m
+
+                            # Verify deployment
+                            kubectl get pods -n ${PRODUCTION_NAMESPACE}
+                        """
+                    }
+                }
+            }
+        }
+
+        // ============ STAGE 8: CREATE GIT TAG (main branch) ============
+        stage('Create Git Tag') {
+            when {
+                expression { return (IS_MAIN == 'true') }
+            }
+            steps {
+                script {
+                    def pomVersion = readMavenPom().version
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            git config user.email "jenkins@homelab.local"
+                            git config user.name "Jenkins CI"
+                            git tag -a v${pomVersion} -m "Release version ${pomVersion}"
+                            git push https://skariaj:\${GITHUB_TOKEN}@github.com/skariaj/sample-gitflow-app.git v${pomVersion}
+                            echo "Created tag: v${pomVersion}"
+                        """
+                    }
+                }
+            }
+        }
+
+        // ============ STAGE 9: CLEANUP (feature branches after merge) ============
+        stage('Cleanup') {
+            when {
+                expression { return (IS_FEATURE == 'true') }
+            }
+            steps {
+                echo "Feature branch ${env.BRANCH_NAME} build completed successfully."
+                echo "This branch will be cleaned up after merge to develop."
+
+                script {
+                    // Optional: Add logic to delete feature branch from remote after merge
+                    // This would typically be done manually after PR is merged
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "=========================================="
+            echo "Pipeline completed successfully!"
+            echo "Branch: ${env.BRANCH_NAME}"
+            echo "Build: ${env.BUILD_URL}"
+            echo "=========================================="
+        }
+        failure {
+            echo "=========================================="
+            echo "Pipeline failed!"
+            echo "Branch: ${env.BRANCH_NAME}"
+            echo "Build: ${env.BUILD_URL}"
+            echo "=========================================="
+
+            // Optional: Send email notification
+            // emailext (
+            //     subject: "Pipeline Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+            //     body: "The pipeline failed. Check console output at ${env.BUILD_URL}",
+            //     to: 'team@example.com'
+            // )
+        }
+        always {
+            // Clean up workspace
+            cleanWs()
+        }
+    }
+}
