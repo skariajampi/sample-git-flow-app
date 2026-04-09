@@ -562,6 +562,7 @@ EOF
                 script {
                     // Optional: Add logic to delete feature branch from remote after merge
                     // This would typically be done manually after PR is merged
+                    echo "No cleanup logic yet"
                 }
             }
         }
