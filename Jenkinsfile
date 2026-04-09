@@ -32,29 +32,33 @@ pipeline {
         IS_HOTFIX = 'false'
     }
 
-    stage('Checkout') {
-        agent {
-            kubernetes {
-                yaml '''
-    apiVersion: v1
-    kind: Pod
-    spec:
-      nodeSelector:
-        role: secondary
-      containers:
-      - name: jnlp
-        image: jenkins/inbound-agent:latest
-    '''
-            }
-        }
-        steps {
-            git branch: "${BRANCH_NAME}",
-                url: "https://github.com/skariaj/sample-gitflow-app.git",
-                credentialsId: "github-credentials"
-        }
-    }
+
 
     stages {
+
+    stage('Checkout') {
+            agent {
+                kubernetes {
+                    yaml '''
+        apiVersion: v1
+        kind: Pod
+        spec:
+          nodeSelector:
+            role: secondary
+          containers:
+          - name: jnlp
+            image: jenkins/inbound-agent:latest
+        '''
+                }
+            }
+            steps {
+                git branch: "${BRANCH_NAME}",
+                    url: "https://github.com/skariaj/sample-gitflow-app.git",
+                    credentialsId: "github-credentials"
+            }
+        }
+
+
         // ============ STAGE 0: BRANCH DETECTION (Runs first on all branches) ============
         stage('Detect Branch Type') {
             agent {
