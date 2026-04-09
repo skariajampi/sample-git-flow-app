@@ -53,7 +53,7 @@ pipeline {
             }
             steps {
                 git branch: "${BRANCH_NAME}",
-                    url: "https://github.com/skariajampi/sample-gitflow-app.git",
+                    url: "https://github.com/skariajampi/sample-git-flow-app.git",
                     credentialsId: "github-credentials"
             }
         }
