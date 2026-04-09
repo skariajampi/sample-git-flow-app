@@ -5,7 +5,7 @@ pipeline {
     // ============ POLLING TRIGGER CONFIGURATION ============
     triggers {
         // Poll GitHub every 5 minutes for changes on all branches
-        pollSCM('* * * * *')
+        pollSCM('H/5 * * * *')
 
         // For testing, use every minute: '* * * * *'
         // For production, use: 'H */4 * * *' (every 4 hours)
@@ -22,7 +22,7 @@ pipeline {
 
         // Version calculation
         BUILD_VERSION = "${env.BUILD_NUMBER}"
-        GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        GIT_COMMIT_SHORT = ''
 
         // Branch detection - will be set in first stage
         IS_FEATURE = 'false'
@@ -30,6 +30,28 @@ pipeline {
         IS_RELEASE = 'false'
         IS_MAIN = 'false'
         IS_HOTFIX = 'false'
+    }
+
+    stage('Checkout') {
+        agent {
+            kubernetes {
+                yaml '''
+    apiVersion: v1
+    kind: Pod
+    spec:
+      nodeSelector:
+        role: secondary
+      containers:
+      - name: jnlp
+        image: jenkins/inbound-agent:latest
+    '''
+            }
+        }
+        steps {
+            git branch: "${BRANCH_NAME}",
+                url: "https://github.com/skariaj/sample-gitflow-app.git",
+                credentialsId: "github-credentials"
+        }
     }
 
     stages {
@@ -82,6 +104,11 @@ spec:
                     env.IS_RELEASE = IS_RELEASE.toString()
                     env.IS_MAIN = IS_MAIN.toString()
                     env.IS_HOTFIX = IS_HOTFIX.toString()
+
+                    env.GIT_COMMIT_SHORT = sh(
+                            script: "git rev-parse --short HEAD",
+                            returnStdout: true
+                        ).trim()
                 }
             }
         }
@@ -321,7 +348,7 @@ spec:
             }
             steps {
                 container('docker') {
-                    withCredentials([string(credentialsId: 'docker-hub-password', variable: 'DOCKER_PASS')]) {
+                    withCredentials([string(credentialsId: 'dockerhub-credentials', variable: 'DOCKER_PASS')]) {
                         script {
                             def imageTag = env.IMAGE_TAG
                             def pomVersion = readMavenPom().version
@@ -371,86 +398,12 @@ spec:
                         def imageTag = env.IMAGE_TAG
 
                         sh """
-                            # Create staging namespace if not exists
-                            kubectl create namespace ${STAGING_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            kubectl apply -f deployment.yaml
+                            kubectl set image deployment/${APP_NAME} \
+                              ${APP_NAME}=${DOCKER_HUB_REPO}:${IMAGE_TAG} \
+                              -n ${STAGING_NAMESPACE}
 
-                            # Deploy to staging
-                            cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ${APP_NAME}
-  namespace: ${STAGING_NAMESPACE}
-  labels:
-    app: ${APP_NAME}
-    version: ${releaseVersion}
-    branch: ${env.BRANCH_NAME}
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: ${APP_NAME}
-  template:
-    metadata:
-      labels:
-        app: ${APP_NAME}
-        version: ${releaseVersion}
-    spec:
-      nodeSelector:
-        role: main
-      containers:
-      - name: ${APP_NAME}
-        image: ${DOCKER_HUB_REPO}:${imageTag}
-        ports:
-        - containerPort: 8080
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "staging"
-        - name: APP_VERSION
-          value: "${releaseVersion}"
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 30
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${APP_NAME}
-  namespace: ${STAGING_NAMESPACE}
-spec:
-  selector:
-    app: ${APP_NAME}
-  ports:
-  - port: 80
-    targetPort: 8080
-  type: NodePort
-EOF
-
-                            # Wait for rollout
-                            kubectl rollout status deployment/${APP_NAME} -n ${STAGING_NAMESPACE} --timeout=5m
-
-                            # Get service URL
-                            NODE_PORT=\$(kubectl get svc ${APP_NAME} -n ${STAGING_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
-                            NODE_IP=\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
-                            echo "Application available at: http://\${NODE_IP}:\${NODE_PORT}"
-
-                            # Verify deployment
-                            kubectl get pods -n ${STAGING_NAMESPACE}
+                            kubectl rollout status deployment/${APP_NAME} -n ${STAGING_NAMESPACE}
                         """
                     }
                 }
