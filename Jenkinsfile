@@ -53,7 +53,7 @@ pipeline {
             }
             steps {
                 git branch: "${BRANCH_NAME}",
-                    url: "https://github.com/skariaj/sample-gitflow-app.git",
+                    url: "https://github.com/skariajampi/sample-gitflow-app.git",
                     credentialsId: "github-credentials"
             }
         }
@@ -542,7 +542,7 @@ EOF
                             git config user.email "jenkins@homelab.local"
                             git config user.name "Jenkins CI"
                             git tag -a v${pomVersion} -m "Release version ${pomVersion}"
-                            git push https://skariaj:\${GITHUB_TOKEN}@github.com/skariaj/sample-gitflow-app.git v${pomVersion}
+                            git push https://skariajampi:\${GITHUB_TOKEN}@github.com/skariajampi/sample-gitflow-app.git v${pomVersion}
                             echo "Created tag: v${pomVersion}"
                         """
                     }
