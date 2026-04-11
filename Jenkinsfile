@@ -79,7 +79,7 @@ pipeline {
                     echo "=========================================="
                     echo "Branch: ${branch}"
                     echo "Build Number: ${BUILD_VERSION}"
-                    echo "Git Commit: ${GIT_COMMIT_SHORT}"
+                    echo "Git Commit: ${env.GIT_COMMIT_SHORT}"
                     echo "=========================================="
                     echo "Branch Type Detection:"
                     echo "  - Feature branch: ${IS_FEATURE}"
