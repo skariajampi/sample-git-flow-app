@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-gitflow-app
+  namespace: staging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sample-gitflow-app
+  template:
+    metadata:
+      labels:
+        app: sample-gitflow-app
+    spec:
+      nodeSelector:
+        role: main  # Deploy to Dell 7820
+      containers:
+        - name: sample-gitflow-app
+          image: skariaj/sample-gitflow-app:latest  # Will be replaced by Jenkins
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "staging"
+#            - name: SPRING_DATASOURCE_URL
+#              value: "jdbc:postgresql://postgres.staging.svc.cluster.local:5432/sample-gitflow-app"
+#            - name: SPRING_DATASOURCE_USERNAME
+#              valueFrom:
+#                secretKeyRef:
+#                  name: db-secret
+#                  key: username
+#            - name: SPRING_DATASOURCE_PASSWORD
+#              valueFrom:
+#                secretKeyRef:
+#                  name: db-secret
+#                  key: password
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-gitflow-app
+  namespace: staging
+spec:
+  selector:
+    app: sample-gitflow-app
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
