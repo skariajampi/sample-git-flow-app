@@ -1,6 +1,21 @@
 // Jenkinsfile - Complete GitFlow CI/CD Pipeline with GitHub Polling
 pipeline {
-    agent none  // No default agent - each stage defines its own
+    agent {
+        kubernetes {
+                    yaml '''
+        apiVersion: v1
+        kind: Pod
+        spec:
+          nodeSelector:
+            role: secondary
+          containers:
+          - name: jnlp
+            image: jenkins/inbound-agent:latest
+            args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+          restartPolicy: Never
+        '''
+                }
+    }
 
     // ============ POLLING TRIGGER CONFIGURATION ============
     triggers {
@@ -37,20 +52,7 @@ pipeline {
     stages {
 
     stage('Checkout') {
-            agent {
-                kubernetes {
-                    yaml '''
-        apiVersion: v1
-        kind: Pod
-        spec:
-          nodeSelector:
-            role: secondary
-          containers:
-          - name: jnlp
-            image: jenkins/inbound-agent:latest
-        '''
-                }
-            }
+
             steps {
                 git branch: "${BRANCH_NAME}",
                     url: "https://github.com/skariajampi/sample-git-flow-app.git",
@@ -61,22 +63,7 @@ pipeline {
 
         // ============ STAGE 0: BRANCH DETECTION (Runs first on all branches) ============
         stage('Detect Branch Type') {
-            agent {
-                kubernetes {
-                    yaml '''
-apiVersion: v1
-kind: Pod
-spec:
-  nodeSelector:
-    role: secondary
-  containers:
-  - name: jnlp
-    image: jenkins/inbound-agent:latest
-    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
-  restartPolicy: Never
-'''
-                }
-            }
+
             steps {
                 script {
                     def branch = env.BRANCH_NAME
@@ -119,6 +106,9 @@ spec:
 
         // ============ STAGE 1: UNIT TESTS (Runs on ALL branches) ============
         stage('Unit Tests') {
+            when {
+                        expression { return true }  // Always run on all branches
+                    }
             agent {
                 kubernetes {
                     yaml '''
