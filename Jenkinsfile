@@ -203,11 +203,11 @@ spec:
                     '''
                 }
             }
-            post {
-                always {
-                    junit 'target/failsafe-reports/*.xml'
-                }
-            }
+//             post {
+//                 always {
+//                     junit 'target/failsafe-reports/*.xml'
+//                 }
+//             }
         }
 
         // ============ STAGE 3: BUILD & PACKAGE (develop, release, main, hotfix) ============
