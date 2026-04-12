@@ -199,7 +199,7 @@ spec:
                 container('maven') {
                     sh '''
                         echo "Running integration tests on branch: ${BRANCH_NAME}"
-                        mvn verify -Pintegration-tests
+                        mvn verify
                     '''
                 }
             }
