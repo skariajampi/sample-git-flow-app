@@ -302,6 +302,14 @@ spec:
             }
             steps {
                 container('docker') {
+                withCredentials([
+                                         usernamePassword(
+                                             credentialsId: 'dockerhub-credentials',
+                                             usernameVariable: 'DOCKER_USER',
+                                             passwordVariable: 'DOCKER_PASS'
+                                         )
+                                     ])
+                                 {
                     script {
                         def imageTag = ""
                         def pomVersion = readMavenPom().version
@@ -326,16 +334,26 @@ spec:
                         sh """
                             docker build -t ${DOCKER_HUB_REPO}:${imageTag} .
                             docker tag ${DOCKER_HUB_REPO}:${imageTag} ${DOCKER_HUB_REPO}:latest
+
                         """
 
                         // Save image tag for later stages
                         env.IMAGE_TAG = imageTag
+
+                        // Push docker image
+                        sh """
+                            echo "${DOCKER_PASS}" | docker login -u skariaj --password-stdin
+                            docker push ${DOCKER_HUB_REPO}:${imageTag}
+                            docker push ${DOCKER_HUB_REPO}:latest
+                            echo "Successfully pushed: ${DOCKER_HUB_REPO}:${imageTag}"
+                        """
+                    }
                     }
                 }
             }
         }
 
-        // ============ STAGE 5: PUSH TO DOCKER HUB (release, main, hotfix) ============
+        /* // ============ STAGE 5: PUSH TO DOCKER HUB (release, main, hotfix) ============
         stage('Push to Docker Hub') {
             when {
                 expression {
@@ -392,7 +410,7 @@ spec:
                     }
                 }
             }
-        }
+        } */
 
         // ============ STAGE 6: DEPLOY TO STAGING (release branches) ============
         stage('Deploy to Staging') {
