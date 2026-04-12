@@ -398,6 +398,16 @@ spec:
             }
         }
 
+        stage('Approve Production Deploy') {
+            when {
+                expression { return (env.IS_MAIN == 'true') }
+            }
+            steps {
+                input message: 'Deploy to Production?', ok: 'Deploy'
+            }
+        }
+
+
         // ============ STAGE 7: DEPLOY TO PRODUCTION (main branch with approval) ============
         stage('Deploy to Production') {
             when {
@@ -424,8 +434,6 @@ spec:
                 }
             }
             steps {
-                // Manual approval required for production
-                input message: 'Deploy to Production?', ok: 'Deploy'
 
                 container('kubectl') {
                     script {
