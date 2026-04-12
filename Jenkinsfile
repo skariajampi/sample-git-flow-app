@@ -158,7 +158,14 @@ spec:
         // ============ STAGE 2: INTEGRATION TESTS (develop, release, main, hotfix) ============
         stage('Integration Tests') {
             when {
-                expression { return (IS_DEVELOP == 'true' || IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+                expression {
+                        return (
+                            env.IS_DEVELOP?.toBoolean() ||
+                            env.IS_RELEASE?.toBoolean() ||
+                            env.IS_MAIN?.toBoolean() ||
+                            env.IS_HOTFIX?.toBoolean()
+                        )
+                    }
             }
             agent {
                 kubernetes {
@@ -205,7 +212,14 @@ spec:
         // ============ STAGE 3: BUILD & PACKAGE (develop, release, main, hotfix) ============
         stage('Build & Package') {
             when {
-                expression { return (IS_DEVELOP == 'true' || IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+                expression {
+                        return (
+                            env.IS_DEVELOP?.toBoolean() ||
+                            env.IS_RELEASE?.toBoolean() ||
+                            env.IS_MAIN?.toBoolean() ||
+                            env.IS_HOTFIX?.toBoolean()
+                        )
+                    }
             }
             agent {
                 kubernetes {
@@ -249,7 +263,13 @@ spec:
         // ============ STAGE 4: BUILD DOCKER IMAGE (release, main, hotfix) ============
         stage('Build Docker Image') {
             when {
-                expression { return (IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+                expression {
+                        return (
+                            env.IS_RELEASE?.toBoolean() ||
+                            env.IS_MAIN?.toBoolean() ||
+                            env.IS_HOTFIX?.toBoolean()
+                        )
+                    }
             }
             agent {
                 kubernetes {
@@ -285,16 +305,16 @@ spec:
                         def imageTag = ""
                         def pomVersion = readMavenPom().version
 
-                        if (IS_MAIN == 'true') {
+                        if (env.IS_MAIN?.toBoolean()) {
                             // Production tag from pom.xml version
                             imageTag = pomVersion
                             echo "Building production image with tag: ${imageTag}"
-                        } else if (IS_RELEASE == 'true') {
+                        } else if (env.IS_RELEASE?.toBoolean()) {
                             // Release candidate tag
                             def releaseVersion = env.BRANCH_NAME.replace('release/', '')
                             imageTag = "${releaseVersion}-rc.${BUILD_VERSION}"
                             echo "Building release candidate image with tag: ${imageTag}"
-                        } else if (IS_HOTFIX == 'true') {
+                        } else if (env.IS_HOTFIX?.toBoolean()) {
                             // Hotfix tag
                             def hotfixVersion = env.BRANCH_NAME.replace('hotfix/', '')
                             imageTag = "${pomVersion}-hotfix-${BUILD_VERSION}"
@@ -317,7 +337,13 @@ spec:
         // ============ STAGE 5: PUSH TO DOCKER HUB (release, main, hotfix) ============
         stage('Push to Docker Hub') {
             when {
-                expression { return (IS_RELEASE == 'true' || IS_MAIN == 'true' || IS_HOTFIX == 'true') }
+                expression {
+                                        return (
+                                            env.IS_RELEASE?.toBoolean() ||
+                                            env.IS_MAIN?.toBoolean() ||
+                                            env.IS_HOTFIX?.toBoolean()
+                                        )
+                                    }
             }
             agent {
                 kubernetes {
@@ -363,7 +389,7 @@ spec:
         // ============ STAGE 6: DEPLOY TO STAGING (release branches) ============
         stage('Deploy to Staging') {
             when {
-                expression { return (IS_RELEASE == 'true') }
+                expression { return (env.IS_RELEASE?.toBoolean()) }
             }
             agent {
                 kubernetes {
@@ -407,7 +433,7 @@ spec:
         // ============ STAGE 7: DEPLOY TO PRODUCTION (main branch with approval) ============
         stage('Deploy to Production') {
             when {
-                expression { return (IS_MAIN == 'true') }
+                expression { return (env.IS_MAIN?.toBoolean()) }
             }
             agent {
                 kubernetes {
@@ -522,7 +548,7 @@ EOF
         // ============ STAGE 8: CREATE GIT TAG (main branch) ============
         stage('Create Git Tag') {
             when {
-                expression { return (IS_MAIN == 'true') }
+                expression { return (env.IS_MAIN?.toBoolean()) }
             }
             steps {
                 script {
@@ -543,7 +569,7 @@ EOF
         // ============ STAGE 9: CLEANUP (feature branches after merge) ============
         stage('Cleanup') {
             when {
-                expression { return (IS_FEATURE == 'true') }
+                expression { return (env.IS_FEATURE?.toBoolean()) }
             }
             steps {
                 echo "Feature branch ${env.BRANCH_NAME} build completed successfully."
