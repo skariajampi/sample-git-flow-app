@@ -161,10 +161,7 @@ spec:
             when {
                 expression {
                         return (
-                            env.IS_DEVELOP?.toBoolean() ||
-                            env.IS_RELEASE?.toBoolean() ||
-                            env.IS_MAIN?.toBoolean() ||
-                            env.IS_HOTFIX?.toBoolean()
+                            IS_DEVELOP?.toBoolean()
                         )
                     }
             }
