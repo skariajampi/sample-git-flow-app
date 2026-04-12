@@ -141,6 +141,7 @@ spec:
                     script {
                         echo "Running Unit Tests on branch: ${env.BRANCH_NAME}"
                         echo "Branch type - Feature: ${IS_FEATURE}, Develop: ${IS_DEVELOP}, Release: ${IS_RELEASE}, Main: ${IS_MAIN}, Hotfix: ${IS_HOTFIX}"
+                        echo "Branch type - Feature: ${env.IS_FEATURE}, Develop: ${env.IS_DEVELOP}, Release: ${env.IS_RELEASE}, Main: ${env.IS_MAIN}, Hotfix: ${env.IS_HOTFIX}"
                     }
                     sh '''
                         mvn clean test
@@ -158,6 +159,11 @@ spec:
         // ============ STAGE 2: INTEGRATION TESTS (develop, release, main, hotfix) ============
         stage('Integration Tests') {
             when {
+                script {
+                                        echo "Running Unit Tests on branch: ${env.BRANCH_NAME}"
+                                        echo "Branch type - Feature: ${IS_FEATURE}, Develop: ${IS_DEVELOP}, Release: ${IS_RELEASE}, Main: ${IS_MAIN}, Hotfix: ${IS_HOTFIX}"
+                                        echo "Branch type - Feature: ${env.IS_FEATURE}, Develop: ${env.IS_DEVELOP}, Release: ${env.IS_RELEASE}, Main: ${env.IS_MAIN}, Hotfix: ${env.IS_HOTFIX}"
+                                    }
                 expression {
                         return (
                             env.IS_DEVELOP?.toBoolean() ||
