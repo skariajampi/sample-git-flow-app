@@ -369,7 +369,14 @@ spec:
             }
             steps {
                 container('docker') {
-                    withCredentials([string(credentialsId: 'dockerhub-credentials', variable: 'DOCKER_PASS')]) {
+                    //withCredentials([string(credentialsId: 'dockerhub-credentials', variable: 'DOCKER_PASS')])
+                     withCredentials([
+                         usernamePassword(
+                             credentialsId: 'dockerhub-credentials',
+                             usernameVariable: 'DOCKER_USER',
+                             passwordVariable: 'DOCKER_PASS'
+                         )
+                     ]) {
                         script {
                             def imageTag = env.IMAGE_TAG
                             def pomVersion = readMavenPom().version
