@@ -353,64 +353,6 @@ spec:
             }
         }
 
-        /* // ============ STAGE 5: PUSH TO DOCKER HUB (release, main, hotfix) ============
-        stage('Push to Docker Hub') {
-            when {
-                expression {
-                                        return (
-                                            IS_RELEASE?.toBoolean() ||
-                                            IS_MAIN?.toBoolean() ||
-                                            IS_HOTFIX?.toBoolean()
-                                        )
-                                    }
-            }
-            agent {
-                kubernetes {
-                    yaml '''
-apiVersion: v1
-kind: Pod
-spec:
-  nodeSelector:
-    role: secondary
-  containers:
-  - name: jnlp
-    image: jenkins/inbound-agent:latest
-    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
-  - name: docker
-    image: docker:24-dind
-    command: ["dockerd-entrypoint.sh"]
-    securityContext:
-      privileged: true
-  restartPolicy: Never
-'''
-                }
-            }
-            steps {
-                container('docker') {
-                    //withCredentials([string(credentialsId: 'dockerhub-credentials', variable: 'DOCKER_PASS')])
-                     withCredentials([
-                         usernamePassword(
-                             credentialsId: 'dockerhub-credentials',
-                             usernameVariable: 'DOCKER_USER',
-                             passwordVariable: 'DOCKER_PASS'
-                         )
-                     ]) {
-                        script {
-                            def imageTag = env.IMAGE_TAG
-                            def pomVersion = readMavenPom().version
-
-                            sh """
-                                echo "${DOCKER_PASS}" | docker login -u skariaj --password-stdin
-                                docker push ${DOCKER_HUB_REPO}:${imageTag}
-                                docker push ${DOCKER_HUB_REPO}:latest
-
-                                echo "Successfully pushed: ${DOCKER_HUB_REPO}:${imageTag}"
-                            """
-                        }
-                    }
-                }
-            }
-        } */
 
         // ============ STAGE 6: DEPLOY TO STAGING (release branches) ============
         stage('Deploy to Staging') {
