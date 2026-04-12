@@ -161,7 +161,10 @@ spec:
             when {
                 expression {
                         return (
-                            IS_DEVELOP?.toBoolean()
+                            IS_DEVELOP?.toBoolean() ||
+                            IS_MAIN?.toBoolean() ||
+                            IS_RELEASE?.toBoolean() ||
+                            IS_HOTFIX?.toBoolean()
                         )
                     }
             }
@@ -212,10 +215,10 @@ spec:
             when {
                 expression {
                         return (
-                            env.IS_DEVELOP?.toBoolean() ||
-                            env.IS_RELEASE?.toBoolean() ||
-                            env.IS_MAIN?.toBoolean() ||
-                            env.IS_HOTFIX?.toBoolean()
+                            IS_DEVELOP?.toBoolean() ||
+                            IS_RELEASE?.toBoolean() ||
+                            IS_MAIN?.toBoolean() ||
+                            IS_HOTFIX?.toBoolean()
                         )
                     }
             }
@@ -263,9 +266,9 @@ spec:
             when {
                 expression {
                         return (
-                            env.IS_RELEASE?.toBoolean() ||
-                            env.IS_MAIN?.toBoolean() ||
-                            env.IS_HOTFIX?.toBoolean()
+                            IS_RELEASE?.toBoolean() ||
+                            IS_MAIN?.toBoolean() ||
+                            IS_HOTFIX?.toBoolean()
                         )
                     }
             }
@@ -303,18 +306,18 @@ spec:
                         def imageTag = ""
                         def pomVersion = readMavenPom().version
 
-                        if (env.IS_MAIN?.toBoolean()) {
+                        if (IS_MAIN?.toBoolean()) {
                             // Production tag from pom.xml version
                             imageTag = pomVersion
                             echo "Building production image with tag: ${imageTag}"
-                        } else if (env.IS_RELEASE?.toBoolean()) {
+                        } else if (IS_RELEASE?.toBoolean()) {
                             // Release candidate tag
                             def releaseVersion = env.BRANCH_NAME.replace('release/', '')
                             imageTag = "${releaseVersion}-rc.${BUILD_VERSION}"
                             echo "Building release candidate image with tag: ${imageTag}"
-                        } else if (env.IS_HOTFIX?.toBoolean()) {
+                        } else if (IS_HOTFIX?.toBoolean()) {
                             // Hotfix tag
-                            def hotfixVersion = env.BRANCH_NAME.replace('hotfix/', '')
+                            def hotfixVersion = BRANCH_NAME.replace('hotfix/', '')
                             imageTag = "${pomVersion}-hotfix-${BUILD_VERSION}"
                             echo "Building hotfix image with tag: ${imageTag}"
                         }
@@ -337,9 +340,9 @@ spec:
             when {
                 expression {
                                         return (
-                                            env.IS_RELEASE?.toBoolean() ||
-                                            env.IS_MAIN?.toBoolean() ||
-                                            env.IS_HOTFIX?.toBoolean()
+                                            IS_RELEASE?.toBoolean() ||
+                                            IS_MAIN?.toBoolean() ||
+                                            IS_HOTFIX?.toBoolean()
                                         )
                                     }
             }
@@ -387,7 +390,7 @@ spec:
         // ============ STAGE 6: DEPLOY TO STAGING (release branches) ============
         stage('Deploy to Staging') {
             when {
-                expression { return (env.IS_RELEASE?.toBoolean()) }
+                expression { return (IS_RELEASE?.toBoolean()) }
             }
             agent {
                 kubernetes {
@@ -431,7 +434,7 @@ spec:
         // ============ STAGE 7: DEPLOY TO PRODUCTION (main branch with approval) ============
         stage('Deploy to Production') {
             when {
-                expression { return (env.IS_MAIN?.toBoolean()) }
+                expression { return (IS_MAIN?.toBoolean()) }
             }
             agent {
                 kubernetes {
@@ -546,7 +549,7 @@ EOF
         // ============ STAGE 8: CREATE GIT TAG (main branch) ============
         stage('Create Git Tag') {
             when {
-                expression { return (env.IS_MAIN?.toBoolean()) }
+                expression { return (IS_MAIN?.toBoolean()) }
             }
             steps {
                 script {
@@ -567,7 +570,7 @@ EOF
         // ============ STAGE 9: CLEANUP (feature branches after merge) ============
         stage('Cleanup') {
             when {
-                expression { return (env.IS_FEATURE?.toBoolean()) }
+                expression { return (IS_FEATURE?.toBoolean()) }
             }
             steps {
                 echo "Feature branch ${env.BRANCH_NAME} build completed successfully."
