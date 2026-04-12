@@ -400,7 +400,7 @@ spec:
 
         stage('Approve Production Deploy') {
             when {
-                expression { return (env.IS_MAIN == 'true') }
+                expression { return (IS_MAIN?.toBoolean()) }
             }
             steps {
                 input message: 'Deploy to Production?', ok: 'Deploy'
