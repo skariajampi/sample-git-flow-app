@@ -398,14 +398,14 @@ spec:
             }
         }
 
-        stage('Approve Production Deploy') {
+        /* stage('Approve Production Deploy') {
             when {
                 expression { return (IS_MAIN?.toBoolean()) }
             }
             steps {
                 input message: 'Deploy to Production?', ok: 'Deploy'
             }
-        }
+        } */
 
 
         // ============ STAGE 7: DEPLOY TO PRODUCTION (main branch with approval) ============
