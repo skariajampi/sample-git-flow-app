@@ -125,6 +125,9 @@ spec:
     image: maven:3.9-eclipse-temurin-17
     command: ["sleep"]
     args: ["infinity"]
+    volumeMounts:
+    - name: maven-cache
+      mountPath: /root/.m2
     resources:
       requests:
         memory: "2Gi"
@@ -133,6 +136,10 @@ spec:
         memory: "4Gi"
         cpu: "2000m"
   restartPolicy: Never
+  volumes:
+  - name: maven-cache
+    persistentVolumeClaim:
+      claimName: maven-cache-pvc
 '''
                 }
             }
@@ -184,6 +191,9 @@ spec:
     image: maven:3.9-eclipse-temurin-17
     command: ["sleep"]
     args: ["infinity"]
+    volumeMounts:
+    - name: maven-cache
+      mountPath: /root/.m2
     resources:
       requests:
         memory: "2Gi"
@@ -192,6 +202,10 @@ spec:
         memory: "4Gi"
         cpu: "2000m"
   restartPolicy: Never
+  volumes:
+  - name: maven-cache
+    persistentVolumeClaim:
+      claimName: maven-cache-pvc
 '''
                 }
             }
@@ -439,76 +453,13 @@ spec:
                     script {
                         def pomVersion = readMavenPom().version
                         def imageTag = env.IMAGE_TAG ?: pomVersion
-
+                        echo "deploy to production with image with tag: ${imageTag} and pomVersion: ${pomVersion}"
                         sh """
                             # Create production namespace if not exists
                             kubectl create namespace ${PRODUCTION_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
                             # Deploy to production
-                            cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ${APP_NAME}
-  namespace: ${PRODUCTION_NAMESPACE}
-  labels:
-    app: ${APP_NAME}
-    version: ${pomVersion}
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: ${APP_NAME}
-  template:
-    metadata:
-      labels:
-        app: ${APP_NAME}
-        version: ${pomVersion}
-    spec:
-      nodeSelector:
-        role: main
-      containers:
-      - name: ${APP_NAME}
-        image: ${DOCKER_HUB_REPO}:${imageTag}
-        ports:
-        - containerPort: 8080
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "production"
-        - name: APP_VERSION
-          value: "${pomVersion}"
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: 8080
-          initialDelaySeconds: 30
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${APP_NAME}
-  namespace: ${PRODUCTION_NAMESPACE}
-spec:
-  selector:
-    app: ${APP_NAME}
-  ports:
-  - port: 80
-    targetPort: 8080
-  type: LoadBalancer
-EOF
+                            kubectl apply -f k8s/staging/deployment.yaml
 
                             # Wait for rollout
                             kubectl rollout status deployment/${APP_NAME} -n ${PRODUCTION_NAMESPACE} --timeout=5m
