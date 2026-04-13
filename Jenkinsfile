@@ -441,9 +441,9 @@ spec:
     args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
   - name: kubectl
     image: alpine/k8s:1.29.2
-      command:
-      - cat
-      tty: true
+    command:
+    - cat
+    tty: true
   restartPolicy: Never
 '''
                 }
