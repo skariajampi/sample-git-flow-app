@@ -460,7 +460,7 @@ spec:
                             #kubectl create namespace ${PRODUCTION_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
                             # Deploy to production
-                            kubectl apply -f k8s/staging/deployment.yaml
+                            kubectl apply -f k8s/production/deployment.yaml
 
                             # Wait for rollout
                             kubectl rollout status deployment/${APP_NAME} -n ${PRODUCTION_NAMESPACE} --timeout=5m
