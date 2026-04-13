@@ -440,9 +440,10 @@ spec:
     image: jenkins/inbound-agent:latest
     args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
   - name: kubectl
-    image: bitnami/kubectl:latest
-    command: ["sleep"]
-    args: ["infinity"]
+    image: alpine/k8s:1.29.2
+      command:
+      - cat
+      tty: true
   restartPolicy: Never
 '''
                 }
