@@ -457,7 +457,7 @@ spec:
                         echo "deploy to production with image with tag: ${imageTag} and pomVersion: ${pomVersion}"
                         sh """
                             # Create production namespace if not exists
-                            kubectl create namespace ${PRODUCTION_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            #kubectl create namespace ${PRODUCTION_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
                             # Deploy to production
                             kubectl apply -f k8s/staging/deployment.yaml
