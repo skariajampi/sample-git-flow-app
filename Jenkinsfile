@@ -492,7 +492,7 @@ spec:
                             git config user.email "jenkins@homelab.local"
                             git config user.name "Jenkins CI"
                             git tag -a v${pomVersion} -m "Release version ${pomVersion}"
-                            git push https://skariajampi:\${GITHUB_TOKEN}@github.com/skariajampi/sample-gitflow-app.git v${pomVersion}
+                            git push https://skariajampi:\${GITHUB_TOKEN}@github.com/skariajampi/sample-git-flow-app.git v${pomVersion}
                             echo "Created tag: v${pomVersion}"
                         """
                     }
