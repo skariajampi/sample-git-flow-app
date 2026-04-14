@@ -481,7 +481,13 @@ spec:
             steps {
                 script {
                     def pomVersion = readMavenPom().version
-                    withCredentials([string(credentialsId: 'github-credentials', variable: 'GITHUB_TOKEN')]) {
+                    withCredentials([
+                                                                             usernamePassword(
+                                                                                 credentialsId: 'github-credentials',
+                                                                                 usernameVariable: 'GITHUB_USER',
+                                                                                 passwordVariable: 'GITHUB_TOKEN'
+                                                                             )
+                                                                         ]) {
                         sh """
                             git config user.email "jenkins@homelab.local"
                             git config user.name "Jenkins CI"
